@@ -8,31 +8,34 @@ import 'package:gsports/features/4_booking/repository/booking_repository.dart';
 import 'package:gsports/shared_widgets/error_display.dart';
 import 'package:gsports/shared_widgets/loading_indicator.dart';
 
-// --- PROVIDER BARU UNTUK STATE PILIHAN ---
-/// `selectedSlotProvider` menyimpan state slot waktu yang sedang dipilih oleh pengguna.
-///
-/// Menggunakan `StateProvider<TimeOfDay?>` karena state-nya bisa berupa
-/// `TimeOfDay` (jika ada yang dipilih) atau `null` (jika tidak ada yang dipilih).
-/// `.autoDispose` memastikan state ini di-reset saat pengguna meninggalkan halaman,
-/// sehingga pilihan tidak "nyangkut" untuk sesi berikutnya.
-final selectedSlotProvider = StateProvider.autoDispose<TimeOfDay?>((ref) => null);
-
-
 /// `AvailabilityGrid` adalah widget yang bertanggung jawab untuk menampilkan
 /// grid jadwal ketersediaan slot waktu secara dinamis dan real-time.
+///
+/// Widget ini sekarang bersifat 'presentational', artinya ia tidak mengelola
+/// state-nya sendiri, melainkan menerima data dan callback dari widget induknya.
 class AvailabilityGrid extends ConsumerWidget {
   final String fieldId;
   final TimeOfDay openTime;
   final TimeOfDay closeTime;
+
+  /// Slot waktu yang sedang dipilih saat ini. Disediakan oleh widget induk.
+  final TimeOfDay? selectedSlot;
+  
+  /// Callback yang akan dipanggil saat slot yang tersedia ditekan.
+  /// Logika aksi (memilih slot, menampilkan dialog, dll.) ditangani oleh
+  /// widget induk yang menyediakan callback ini.
+  final Function(TimeOfDay slot)? onSlotTap;
 
   const AvailabilityGrid({
     super.key,
     required this.fieldId,
     required this.openTime,
     required this.closeTime,
+    this.selectedSlot,
+    this.onSlotTap,
   });
 
-  // Method _generateTimeSlots dan _getSlotStatus tidak berubah.
+  /// Helper untuk men-generate daftar slot waktu per jam.
   List<TimeOfDay> _generateTimeSlots(TimeOfDay open, TimeOfDay close) {
     final slots = <TimeOfDay>[];
     var currentTime = open;
@@ -42,18 +45,16 @@ class AvailabilityGrid extends ConsumerWidget {
     }
     return slots;
   }
-  // Di dalam kelas AvailabilityGrid
 
+  /// Helper untuk menentukan status sebuah slot waktu.
   String _getSlotStatus(TimeOfDay slotTime, ScheduleData scheduleData) {
     // Cek apakah slot ini ada di dalam daftar blocked slots.
     final isBlocked = scheduleData.blockedSlots.any((blocked) {
       final start = TimeOfDay(hour: int.parse(blocked.startTime.split(':')[0]), minute: int.parse(blocked.startTime.split(':')[1]));
       final end = TimeOfDay(hour: int.parse(blocked.endTime.split(':')[0]), minute: int.parse(blocked.endTime.split(':')[1]));
-      // Konversi ke menit untuk perbandingan yang mudah
       final slotInMinutes = slotTime.hour * 60 + slotTime.minute;
       final startInMinutes = start.hour * 60 + start.minute;
       final endInMinutes = end.hour * 60 + end.minute;
-      // Slot dianggap terblokir jika berada di antara waktu mulai (inklusif) dan waktu selesai (eksklusif)
       return slotInMinutes >= startInMinutes && slotInMinutes < endInMinutes;
     });
     if (isBlocked) return 'Diblokir';
@@ -81,18 +82,19 @@ class AvailabilityGrid extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final params = AvailabilityParams(fieldId: fieldId);
     final asyncSchedule = ref.watch(availabilityControllerProvider(params));
-    
-    // --- PENAMBAHAN: Mengawasi provider pilihan ---
-    final selectedSlot = ref.watch(selectedSlotProvider);
 
     return asyncSchedule.when(
-      loading: () => const LoadingIndicator(),
+      loading: () => const LoadingIndicator(type: LoadingIndicatorType.simple),
       error: (error, stackTrace) => ErrorDisplay(
         message: error.toString(),
         onRetry: () => ref.invalidate(availabilityControllerProvider(params)),
       ),
       data: (scheduleData) {
         final timeSlots = _generateTimeSlots(openTime, closeTime);
+
+        if (timeSlots.isEmpty) {
+          return const Center(child: Text('Tidak ada jadwal tersedia untuk hari ini.'));
+        }
 
         return GridView.builder(
           shrinkWrap: true,
@@ -108,11 +110,8 @@ class AvailabilityGrid extends ConsumerWidget {
             final slotTime = timeSlots[index];
             final status = _getSlotStatus(slotTime, scheduleData);
             final bool isAvailable = status == 'Tersedia';
-            
-            // --- PENAMBAHAN: Cek apakah slot ini sedang dipilih ---
             final bool isSelected = selectedSlot == slotTime;
 
-            // --- Logika Styling yang Diperbarui ---
             Color? bgColor = isSelected ? Theme.of(context).colorScheme.primary : null;
             Color? textColor = isSelected ? Theme.of(context).colorScheme.onPrimary : null;
             BorderSide borderSide = BorderSide(
@@ -133,13 +132,8 @@ class AvailabilityGrid extends ConsumerWidget {
             return OutlinedButton(
               onPressed: isAvailable
                   ? () {
-                      // --- Logika Aksi yang Diperbarui ---
-                      // `ref.read` digunakan di dalam callback.
-                      // `.notifier` digunakan untuk mengakses instance Notifier-nya.
-                      // `.state` digunakan untuk mengubah nilainya.
-                      // Jika slot yang sama ditekan lagi, batalkan pilihan (set ke null).
-                      ref.read(selectedSlotProvider.notifier).state = 
-                          isSelected ? null : slotTime;
+                      // Panggil callback onSlotTap jika disediakan.
+                      onSlotTap?.call(slotTime);
                     }
                   : null,
               style: OutlinedButton.styleFrom(
