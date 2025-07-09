@@ -34,45 +34,40 @@ class AuthRepository {
   }
 
   // -- METHOD SIGNUP YANG DIPERBAIKI --
-  FutureEitherVoid signUp({
+  FutureEither<UserModel> signUp({
     required String email,
     required String password,
     required String name,
   }) async {
     try {
-      // Langkah 1: Buat akun pengguna dengan data inti.
-      // Parameter `preferences` sudah tidak ada di method ini.
-      final user = await _account.create(
+      // 1. Buat akun
+      await _account.create(
         userId: ID.unique(),
         email: email,
         password: password,
         name: name,
       );
 
-      // Langkah 2 (Opsional tapi sangat dianjurkan): Langsung login setelah registrasi
-      // agar kita bisa langsung memperbarui preferences.
+      // 2. Langsung login untuk membuat sesi
       await _account.createEmailPasswordSession(
         email: email,
         password: password,
       );
 
-      // Langkah 3: Perbarui preferences untuk pengguna yang baru dibuat.
-      // Gunakan method `updatePrefs()`.
+      // 3. Update preferences (role)
       await _account.updatePrefs(
-        prefs: {
-          'role': 'player',
-          // kita bisa menambahkan data pref lain di sini jika perlu
-        },
+        prefs: {'role': 'player'},
       );
+
+      // 4. Ambil data lengkap dari pengguna yang baru saja login
+      final user = await _account.get();
       
-      logger.i("User ${user.name} created successfully with role 'player'");
-      return right(null);
-      
+      // 5. Konversi dan kembalikan UserModel sebagai 'Right'
+      return right(UserModel.fromAppwriteUser(user));
+
     } on AppwriteException catch (e, st) {
-      logger.e("AppwriteException during signUp: ${e.message}", stackTrace: st);
       return left(Failure(message: e.message ?? 'Sign up failed.', stackTrace: st));
     } catch (e, st) {
-      logger.e("Unexpected error during signUp: $e", stackTrace: st);
       return left(Failure(message: e.toString(), stackTrace: st));
     }
   }
