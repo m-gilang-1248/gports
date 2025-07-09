@@ -16,7 +16,7 @@ import 'package:gsports/features/0_auth/controller/auth_controller.dart';
 import 'package:gsports/features/0_auth/view/login_screen.dart';
 import 'package:gsports/features/0_auth/view/register_screen.dart';
 import 'package:gsports/features/1_home/view/home_screen.dart';
-import 'package:gsports/features/2_sc_list/view/sc_list_screen.dart'; // Impor yang benar
+import 'package:gsports/features/2_sc_list/view/sc_list_screen.dart';
 import 'package:gsports/features/3_sc_details/view/field_details_screen.dart';
 import 'package:gsports/features/3_sc_details/view/sc_details_screen.dart';
 import 'package:gsports/features/4_booking/view/booking_confirmation_screen.dart';
@@ -32,39 +32,80 @@ import 'package:gsports/features/6_sc_admin/view/fields/sc_admin_field_list_scre
 import 'package:gsports/features/6_sc_admin/view/profile/sc_admin_profile_screen.dart';
 import 'package:gsports/shared_widgets/bottom_nav_bar.dart';
 import 'package:gsports/shared_widgets/error_display.dart';
+import 'package:gsports/shared_widgets/loading_indicator.dart';
 
 import 'route_names.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateChangesProvider);
   final rootNavigatorKey = GlobalKey<NavigatorState>();
   
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/login',
-    
-    redirect: (BuildContext context, GoRouterState state) {
-      if (authState.isLoading || authState.hasError) return null;
-      final isLoggedIn = authState.valueOrNull != null;
-      final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-      
-      if (!isLoggedIn && !isLoggingIn) return '/login';
+    initialLocation: '/splash', // Selalu mulai dari splash screen yang netral
 
-      if (isLoggedIn && isLoggingIn) {
-        final user = ref.read(userProvider).value;
-        if (user?.role == UserRole.scAdmin) return '/admin/dashboard';
+    // --- BLOK REDIRECT YANG DIPERBARUI DAN LEBIH KUAT ---
+    redirect: (BuildContext context, GoRouterState state) {
+      final authState = ref.watch(authStateChangesProvider);
+      final userState = ref.watch(userProvider);
+      
+      final currentRoute = state.matchedLocation;
+
+      // 1. Tangani State Loading
+      // Jika salah satu dari provider fundamental ini masih loading,
+      // arahkan ke splash screen, kecuali jika kita sudah berada di sana.
+      if (authState.isLoading || userState.isLoading) {
+        return currentRoute == '/splash' ? null : '/splash';
+      }
+
+      // 2. Dapatkan Nilai Aktual Setelah Loading Selesai
+      final isLoggedIn = authState.valueOrNull != null;
+      
+      // 3. Logika untuk Pengguna yang Belum Login
+      final isGoingToAuthPage = currentRoute == '/login' || currentRoute == '/register';
+      if (!isLoggedIn) {
+        // Jika pengguna belum login dan TIDAK sedang menuju halaman login/register,
+        // paksa mereka ke halaman login. Ini akan menangani kasus di mana mereka
+        // stuck di '/splash' setelah logout.
+        return isGoingToAuthPage ? null : '/login';
+      }
+
+      // 4. Logika untuk Pengguna yang SUDAH Login
+      final user = userState.valueOrNull;
+      final isAdmin = user?.role == UserRole.scAdmin || user?.role == UserRole.superAdmin;
+
+      // Jika pengguna yang sudah login mencoba mengakses halaman auth/splash,
+      // arahkan mereka ke halaman yang benar sesuai perannya.
+      if (isGoingToAuthPage || currentRoute == '/splash') {
+        return isAdmin ? '/admin/dashboard' : '/home';
+      }
+      
+      // 5. Pengaman Peran (Sangat Penting)
+      // Jika admin mencoba mengakses rute pemain (semua yang tidak diawali /admin)
+      if (isAdmin && !currentRoute.startsWith('/admin')) {
+        return '/admin/dashboard';
+      }
+      
+      // Jika pemain mencoba mengakses rute admin
+      if (!isAdmin && currentRoute.startsWith('/admin')) {
         return '/home';
       }
+      
+      // 6. Jika semua aturan di atas lolos, izinkan navigasi.
       return null;
     },
-    
-    // --- PERBAIKAN 3: errorPageBuilder di level GoRouter ---
+
     errorPageBuilder: (context, state) => MaterialPage(
       key: state.pageKey,
       child: ErrorDisplay(message: 'Halaman tidak ditemukan: ${state.error}'),
     ),
-
+    
     routes: [
+      // Rute untuk Splash Screen
+      GoRoute(
+        path: '/splash',
+        name: RouteNames.splash,
+        builder: (context, state) => const Scaffold(body: LoadingIndicator(type: LoadingIndicatorType.simple)),
+      ),
       GoRoute(
         name: RouteNames.login,
         path: '/login',
@@ -84,6 +125,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
 
+      // Rute untuk Pemain dengan Bottom Nav Bar
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return BottomNavBarShell(navigationShell: navigationShell);
@@ -153,7 +195,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     name: RouteNames.editProfile,
-                    path: 'edit', // -> /profile/edit
+                    path: 'edit',
                     builder: (context, state) {
                       final user = state.extra as UserModel;
                       return EditProfileScreen(user: user);
@@ -166,6 +208,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
+      // Rute untuk Admin SC
       GoRoute(
         name: RouteNames.adminDashboard,
         path: '/admin/dashboard',
@@ -184,24 +227,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                       return SCAdminFieldEditScreen(field: field);
                     },
                 ),
-            ], // <-- PERBAIKAN 1: Menambahkan kurung siku penutup yang hilang
+            ],
           ),
           GoRoute(
             name: RouteNames.adminBookingList,
-            path: 'bookings', // -> /admin/dashboard/bookings
+            path: 'bookings',
             builder: (context, state) => const SCAdminBookingListScreen(),
-          ),
-          GoRoute(
-            name: RouteNames.adminBookingDetails,
-            path: 'bookings/details', // -> /admin/dashboard/bookings/details
-            builder: (context, state) {
-              final booking = state.extra as BookingModel;
-              return SCAdminBookingDetailsScreen(booking: booking);
-            },
+            routes: [
+                GoRoute(
+                    name: RouteNames.adminBookingDetails,
+                    path: 'details',
+                    builder: (context, state) {
+                      final booking = state.extra as BookingModel;
+                      return SCAdminBookingDetailsScreen(booking: booking);
+                    },
+                ),
+            ],
           ),
           GoRoute(
             name: RouteNames.adminProfile,
-            path: 'profile', // -> /admin/dashboard/profile
+            path: 'profile',
             builder: (context, state) => const SCAdminProfileScreen(),
           ),
         ],

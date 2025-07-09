@@ -2,9 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:appwrite/models.dart' as appwrite_models; // Diperlukan untuk StreamProvider
-import 'package:gsports/config/router/route_names.dart';
+import 'package:appwrite/models.dart' as appwrite_models;
 import 'package:gsports/core/models/user_model.dart';
 import 'package:gsports/core/utils/snackbar.dart';
 import 'package:gsports/features/0_auth/repository/auth_repository.dart';
@@ -17,24 +15,23 @@ final authControllerProvider =
   return AuthController(authRepository: authRepository, ref: ref);
 });
 
-// Provider ini TIDAK PERLU DIUBAH
+/// Provider ini sangat penting untuk GoRouter.
+/// Ia memberitahu seluruh aplikasi tentang status sesi saat ini.
 final authStateChangesProvider = StreamProvider<appwrite_models.User?>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
-  // Kode ini akan menjadi lebih reaktif jika kita menggunakan stream langsung
-  // dari Appwrite, tapi untuk sekarang kita akan mengandalkan `ref.invalidate`
-  // atau hot-reload untuk memicunya kembali.
-  // Untuk membuatnya benar-benar reaktif, kita bisa membuat stream di repository
-  // yang 'yield' setiap kali ada perubahan sesi.
-  // Namun, untuk alur login/logout, pendekatan saat ini sudah cukup.
   return authRepository.getCurrentUserAccount().asStream();
 });
 
-// Provider ini TIDAK PERLU DIUBAH
+/// Provider ini mengubah data mentah dari Appwrite menjadi UserModel kita yang bersih.
+/// GoRouter akan mengawasinya untuk membuat keputusan berbasis peran.
 final userProvider = FutureProvider<UserModel?>((ref) async {
+  // Mengawasi perubahan sesi
   final account = await ref.watch(authStateChangesProvider.future);
   if (account != null) {
+    // Jika ada sesi, konversi menjadi UserModel
     return UserModel.fromAppwriteUser(account);
   }
+  // Jika tidak ada sesi, kembalikan null
   return null;
 });
 
@@ -52,80 +49,74 @@ class AuthController extends StateNotifier<bool> {
         _ref = ref,
         super(false);
 
-  /// Method signUp yang sudah diperbaiki
+  /// Method signUp yang bersih.
+  /// Tugasnya hanya memanggil repository dan memberitahu UI.
   void signUp({
     required String email,
     required String password,
     required String name,
     required BuildContext context,
   }) async {
-    state = true;
-    // --- PERBAIKAN: Tipe 'result' sekarang adalah Either<Failure, UserModel> ---
+    state = true; // Tampilkan loading
     final result = await _authRepository.signUp(
       email: email,
       password: password,
       name: name,
     );
-    state = false;
+    state = false; // Sembunyikan loading
 
     result.fold(
       (failure) => showSnackBar(context, failure.message, isError: true),
       (userModel) {
-        // Invalidate provider agar GoRouter mendeteksi perubahan state
+        // --- PERUBAHAN ---
+        // 1. Invalidate provider agar GoRouter tahu state berubah.
         _ref.invalidate(authStateChangesProvider);
         _ref.invalidate(userProvider);
-        
+        // 2. Beri feedback ke pengguna.
         showSnackBar(context, 'Selamat datang, ${userModel.name}!');
-        
-        // Navigasi eksplisit untuk memastikan pengguna langsung pindah halaman
-        context.goNamed(RouteNames.home);
+        // 3. TIDAK ADA NAVIGASI. Biarkan GoRouter redirect yang bekerja.
       },
     );
   }
 
-  /// Method login yang sudah diperbaiki
+  /// Method login yang bersih.
   void login({
     required String email,
     required String password,
     required BuildContext context,
   }) async {
-    state = true;
+    state = true; // Tampilkan loading
     final result = await _authRepository.login(
       email: email,
       password: password,
     );
-    state = false;
+    state = false; // Sembunyikan loading
 
     result.fold(
       (failure) => showSnackBar(context, failure.message, isError: true),
       (userModel) {
-        // Invalidate provider untuk memicu GoRouter dan update UI
+        // --- PERUBAHAN ---
+        // 1. Invalidate provider agar GoRouter tahu state berubah.
         _ref.invalidate(authStateChangesProvider);
         _ref.invalidate(userProvider);
-        
-        // Navigasi diserahkan ke GoRouter redirect.
-        // Jika ingin navigasi eksplisit, bisa juga ditambahkan di sini.
-        // context.goNamed(userModel.role == UserRole.scAdmin ? RouteNames.adminDashboard : RouteNames.home);
+        // 2. Beri feedback ke pengguna.
         showSnackBar(context, 'Selamat datang kembali, ${userModel.name}!');
-          if (userModel.role == UserRole.scAdmin || userModel.role == UserRole.superAdmin) {
-          context.goNamed(RouteNames.adminDashboard);
-        } else {
-          context.goNamed(RouteNames.home);
-        }
+        // 3. TIDAK ADA NAVIGASI. Biarkan GoRouter redirect yang bekerja.
       },
     );
   }
 
-  /// Method logout yang sudah diperbaiki
+  /// Method logout yang bersih.
   void logout(BuildContext context) async {
     final result = await _authRepository.logout();
     result.fold(
       (failure) => showSnackBar(context, failure.message, isError: true),
       (r) {
-        // Invalidate provider agar GoRouter mendeteksi logout
+        // --- PERUBAHAN ---
+        // 1. Invalidate provider agar GoRouter tahu state berubah.
         _ref.invalidate(authStateChangesProvider);
         _ref.invalidate(userProvider);
-        // Navigasi ke login akan ditangani oleh GoRouter redirect
+        // 2. Navigasi ke halaman login akan ditangani sepenuhnya oleh GoRouter redirect.
       },
     );
   }
