@@ -3,7 +3,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 
-/// Enum untuk status Sports Center.
+// Enum SCStatus tidak berubah
 enum SCStatus {
   pendingApproval,
   active,
@@ -12,8 +12,6 @@ enum SCStatus {
   unknown,
 }
 
-/// `SCModel` merepresentasikan satu entitas Sports Center (tenant).
-/// Ini mencerminkan struktur dokumen di collection 'sport_centers'.
 class SCModel extends Equatable {
   final String id;
   final String name;
@@ -28,6 +26,10 @@ class SCModel extends Equatable {
   final List<String> additionalPhotosUrls;
   final List<String> facilities;
   final SCStatus status;
+  
+  // [TAMBAHAN PENTING] Tambahkan properti teamId jika belum ada
+  // Ini diperlukan untuk logika izin file.
+  final String? scAdminTeamId; 
 
   const SCModel({
     required this.id,
@@ -43,18 +45,51 @@ class SCModel extends Equatable {
     required this.additionalPhotosUrls,
     required this.facilities,
     required this.status,
+    this.scAdminTeamId, // Tambahkan di constructor
   });
 
-  /// Factory constructor untuk membuat instance `SCModel` dari Map (data JSON
-  /// dari Appwrite). Ini adalah titik konversi utama dari data mentah.
+  // --- [BARU] Tambahkan metode copyWith di sini ---
+  SCModel copyWith({
+    String? id,
+    String? name,
+    String? address,
+    String? city,
+    String? contactPhone,
+    String? contactEmail,
+    String? description,
+    TimeOfDay? openTime,
+    TimeOfDay? closeTime,
+    String? mainPhotoUrl,
+    List<String>? additionalPhotosUrls,
+    List<String>? facilities,
+    SCStatus? status,
+    String? scAdminTeamId,
+  }) {
+    return SCModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      contactPhone: contactPhone ?? this.contactPhone,
+      contactEmail: contactEmail ?? this.contactEmail,
+      description: description ?? this.description,
+      openTime: openTime ?? this.openTime,
+      closeTime: closeTime ?? this.closeTime,
+      mainPhotoUrl: mainPhotoUrl ?? this.mainPhotoUrl,
+      additionalPhotosUrls: additionalPhotosUrls ?? this.additionalPhotosUrls,
+      facilities: facilities ?? this.facilities,
+      status: status ?? this.status,
+      scAdminTeamId: scAdminTeamId ?? this.scAdminTeamId,
+    );
+  }
+
+
   factory SCModel.fromJson(Map<String, dynamic> json) {
-    // Helper function untuk parsing string 'HH:MM' menjadi TimeOfDay
     TimeOfDay parseTime(String timeStr) {
       try {
         final parts = timeStr.split(':');
         return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
       } catch (e) {
-        // Fallback jika format salah
         return const TimeOfDay(hour: 0, minute: 0);
       }
     }
@@ -70,17 +105,14 @@ class SCModel extends Equatable {
       openTime: parseTime(json['sc_operating_hours_open'] as String),
       closeTime: parseTime(json['sc_operating_hours_close'] as String),
       mainPhotoUrl: json['sc_main_photo_url'] as String?,
-      // Mengonversi List<dynamic> menjadi List<String>
       additionalPhotosUrls: List<String>.from(json['sc_additional_photos_urls'] ?? []),
       facilities: List<String>.from(json['sc_facilities'] ?? []),
       status: _mapStringToSCStatus(json['sc_status'] as String),
+      scAdminTeamId: json['sc_admin_team_id'] as String?, // Baca dari JSON
     );
   }
   
-  /// Konversi ke Map untuk dikirim ke Appwrite.
-  /// Berguna saat membuat atau memperbarui dokumen.
   Map<String, dynamic> toJson() {
-    // Helper function untuk format TimeOfDay ke 'HH:MM'
     String formatTime(TimeOfDay time) {
       final hour = time.hour.toString().padLeft(2, '0');
       final minute = time.minute.toString().padLeft(2, '0');
@@ -99,11 +131,11 @@ class SCModel extends Equatable {
       'sc_main_photo_url': mainPhotoUrl,
       'sc_additional_photos_urls': additionalPhotosUrls,
       'sc_facilities': facilities,
-      'sc_status': status.name, // Menggunakan .name dari enum untuk mendapatkan string
+      'sc_status': status.name,
+      'sc_admin_team_id': scAdminTeamId, // Kirim ke JSON
     };
   }
   
-  /// Helper untuk map string status ke enum.
   static SCStatus _mapStringToSCStatus(String status) {
     return SCStatus.values.firstWhere(
       (e) => e.name.toLowerCase() == status.toLowerCase(),
@@ -115,5 +147,6 @@ class SCModel extends Equatable {
   List<Object?> get props => [
     id, name, address, city, contactPhone, contactEmail, description,
     openTime, closeTime, mainPhotoUrl, additionalPhotosUrls, facilities, status,
+    scAdminTeamId, // Tambahkan ke props
   ];
 }

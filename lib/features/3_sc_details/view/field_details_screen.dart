@@ -1,5 +1,6 @@
 // lib/features/3_sc_details/view/field_details_screen.dart
 
+// ... (semua impor tetap sama)
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,19 +18,17 @@ import 'package:gsports/shared_widgets/error_display.dart';
 import 'package:gsports/shared_widgets/loading_indicator.dart';
 import 'package:intl/intl.dart';
 
-// --- DEFINISIKAN PROVIDER DI SINI ---
-/// Provider ini sekarang menjadi milik halaman ini untuk mengelola state UI lokal.
+
+// ... (provider selectedSlotProvider tidak berubah)
 final selectedSlotProvider = StateProvider.autoDispose<TimeOfDay?>((ref) => null);
 
 
 class FieldDetailsScreen extends ConsumerWidget {
   final String fieldId;
-
   const FieldDetailsScreen({super.key, required this.fieldId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Logika ini tetap sama.
     final scId = GoRouterState.of(context).pathParameters['scId']!;
     final asyncData = ref.watch(scDetailsDataProvider(scId));
 
@@ -51,11 +50,10 @@ class FieldDetailsScreen extends ConsumerWidget {
 
   Widget _buildContentView(BuildContext context, WidgetRef ref, SCModel sc, FieldModel field) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
     final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+    // --- DIEDIT DI SINI ---
     void onBookNow() {
-      // Logika ini sekarang akan membaca provider yang didefinisikan di atas.
       final selectedSlot = ref.read(selectedSlotProvider);
       final params = AvailabilityParams(fieldId: field.id);
       final selectedDate = ref.read(availabilityControllerProvider(params).notifier).selectedDate;
@@ -73,9 +71,12 @@ class FieldDetailsScreen extends ConsumerWidget {
         durationInHours: 1,
       );
       
+      // [PERBAIKAN] Kita hanya perlu menyediakan path parameter `scId` karena
+      // rute `bookingConfirmation` bersarang di bawah `scDetails`, bukan `fieldDetails`.
+      // Path lengkapnya adalah: /home/sc/:scId/booking
       context.goNamed(
         RouteNames.bookingConfirmation,
-        pathParameters: {'scId': sc.id, 'fieldId': field.id},
+        pathParameters: {'scId': sc.id}, // HANYA scId yang diperlukan
         extra: bookingParams,
       );
     }
@@ -87,29 +88,43 @@ class FieldDetailsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ... (Galeri Foto dan Info Utama tidak berubah)
+                // Anda mungkin ingin menampilkan galeri foto field di sini
+                if (field.photosUrls.isNotEmpty)
+                  SizedBox(
+                    height: 250,
+                    child: PageView.builder(
+                      itemCount: field.photosUrls.length,
+                      itemBuilder: (context, index) {
+                        return CachedNetworkImage(
+                          imageUrl: field.photosUrls[index],
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => _buildImagePlaceholder(),
+                          errorWidget: (context, url, error) => _buildImageError(),
+                        );
+                      },
+                    ),
+                  )
+                else
+                  _buildImagePlaceholder(),
                 
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ... (Widget Teks, Deskripsi, dll. tidak berubah)
-                      
+                      Text(field.name, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text(field.description ?? 'Tidak ada deskripsi untuk lapangan ini.'),
                       const Divider(height: 32),
-                      Text('Pilih Jadwal', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Pilih Jadwal', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       _buildDatePicker(context, ref, field.id),
                       const SizedBox(height: 16),
-
-                      // --- PERUBAHAN UTAMA: CARA MEMANGGIL AvailabilityGrid ---
                       AvailabilityGrid(
                         fieldId: field.id,
                         openTime: sc.openTime,
                         closeTime: sc.closeTime,
-                        // 1. Teruskan state pilihan dari provider ke grid.
                         selectedSlot: ref.watch(selectedSlotProvider),
-                        // 2. Sediakan callback untuk memperbarui state saat slot ditekan.
                         onSlotTap: (slot) {
                           ref.read(selectedSlotProvider.notifier).state = 
                             (ref.read(selectedSlotProvider) == slot) ? null : slot;
@@ -132,17 +147,9 @@ class FieldDetailsScreen extends ConsumerWidget {
   }
   
   // ... (semua method helper lainnya tidak berubah)
- // Di dalam kelas FieldDetailsScreen, di bawah method buildContentView
-
-  /// Helper untuk membangun placeholder gambar.
   Widget _buildImagePlaceholder() {
-    return Container(
-      height: 250,
-      color: Colors.grey.shade300,
-    );
+    return Container(height: 250, color: Colors.grey.shade300);
   }
-
-  /// Helper untuk membangun tampilan error gambar.
   Widget _buildImageError() {
     return Container(
       height: 250,
@@ -150,12 +157,10 @@ class FieldDetailsScreen extends ConsumerWidget {
       child: const Center(child: Icon(Icons.image_not_supported, size: 60, color: Colors.grey)),
     );
   }
-  
-  /// Helper untuk membangun widget pemilih tanggal.
   Widget _buildDatePicker(BuildContext context, WidgetRef ref, String fieldId) {
+    // ... (kode ini sudah benar)
     final params = AvailabilityParams(fieldId: fieldId);
     final asyncState = ref.watch(availabilityControllerProvider(params));
-
     return asyncState.when(
       data: (_) {
         final selectedDate = ref.watch(availabilityControllerProvider(params).notifier).selectedDate;
@@ -183,9 +188,8 @@ class FieldDetailsScreen extends ConsumerWidget {
       error: (e, st) => Center(child: Text('Gagal memuat tanggal: ${e.toString()}')),
     );
   }
-
-  /// Helper untuk membangun bottom bar booking.
   Widget _buildBookingBottomBar({required BuildContext context, required String price, required VoidCallback onPressed}) {
+    // ... (kode ini sudah benar)
     return Container(
       padding: const EdgeInsets.all(16.0).copyWith(top: 12),
       decoration: BoxDecoration(

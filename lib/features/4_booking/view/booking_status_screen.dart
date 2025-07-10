@@ -1,15 +1,20 @@
 // lib/features/4_booking/view/booking_status_screen.dart
 
+import 'dart:io'; // <-- [BARU]
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // <-- [BARU]
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart'; // <-- [BARU]
+
 import 'package:gsports/config/router/route_names.dart';
 import 'package:gsports/core/models/booking_model.dart';
+import 'package:gsports/features/4_booking/controller/payment_controller.dart'; // <-- [BARU]
 import 'package:gsports/shared_widgets/custom_button.dart';
 import 'package:intl/intl.dart';
 
-class BookingStatusScreen extends StatelessWidget {
-  /// Objek BookingModel dari booking yang baru saja dibuat.
-  /// Ini akan diterima melalui parameter `extra` dari GoRouter.
+// --- [DIEDIT] Ubah menjadi ConsumerWidget ---
+class BookingStatusScreen extends ConsumerWidget {
   final BookingModel booking;
 
   const BookingStatusScreen({
@@ -17,12 +22,28 @@ class BookingStatusScreen extends StatelessWidget {
     required this.booking,
   });
 
+  // --- [BARU] Method untuk memilih dan mengunggah gambar ---
+  void _pickAndUploadProof(BuildContext context, WidgetRef ref) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+
+    if (pickedFile != null) {
+      // Jika ada file yang dipilih, panggil controller untuk memulai proses upload.
+      ref.read(paymentControllerProvider.notifier).uploadPaymentProof(
+            context: context,
+            image: File(pickedFile.path),
+            booking: booking,
+          );
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        // Menghilangkan tombol kembali default agar pengguna
-        // menggunakan tombol navigasi yang kita sediakan.
         automaticallyImplyLeading: false,
         title: const Text('Status Pesanan'),
       ),
@@ -32,24 +53,17 @@ class BookingStatusScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Gunakan `switch` pada status booking untuk menampilkan UI yang sesuai.
-            // Ini membuat kode lebih bersih dan mudah diperluas.
+            // --- [DIEDIT] Kirim ref ke helper method agar bisa me-watch state ---
             ...switch (booking.status) {
+              BookingStatus.pendingPayment =>
+                _buildPendingPaymentContent(context, ref, booking),
               BookingStatus.waitingForScConfirmation =>
                 _buildSuccessContent(context),
-              BookingStatus.pendingPayment =>
-                _buildPendingPaymentContent(context, booking),
-              // Default case untuk status lain yang mungkin terjadi
               _ => _buildGenericStatusContent(context, booking),
             },
-
-            const Spacer(), // Mendorong tombol ke bawah
-
-            // Tombol Navigasi
+            const Spacer(),
             ElevatedButton(
               onPressed: () {
-                // Navigasi ke halaman riwayat. `goNamed` akan mengganti
-                // tumpukan navigasi, jadi pengguna tidak bisa kembali ke halaman ini.
                 context.goNamed(RouteNames.history);
               },
               child: const Text('Lihat Riwayat Pesanan'),
@@ -57,7 +71,6 @@ class BookingStatusScreen extends StatelessWidget {
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: () {
-                // Kembali ke halaman home.
                 context.goNamed(RouteNames.home);
               },
               child: const Text('Kembali ke Beranda'),
@@ -68,7 +81,6 @@ class BookingStatusScreen extends StatelessWidget {
     );
   }
 
-  /// Widget helper untuk konten "Sukses" (Bayar di Tempat).
   List<Widget> _buildSuccessContent(BuildContext context) {
     return [
       const Icon(Icons.check_circle_outline, color: Colors.green, size: 80),
@@ -76,7 +88,10 @@ class BookingStatusScreen extends StatelessWidget {
       Text(
         'Pesanan Berhasil Dibuat!',
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(context)
+            .textTheme
+            .headlineSmall
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 12),
       Text(
@@ -89,16 +104,24 @@ class BookingStatusScreen extends StatelessWidget {
     ];
   }
 
-  /// Widget helper untuk konten "Menunggu Pembayaran" (Transfer Bank).
-  List<Widget> _buildPendingPaymentContent(BuildContext context, BookingModel booking) {
-    final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  // --- [DIEDIT] Helper method sekarang menerima WidgetRef ---
+  List<Widget> _buildPendingPaymentContent(
+      BuildContext context, WidgetRef ref, BookingModel booking) {
+    final currencyFormatter =
+        NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    // Watch loading state dari payment controller
+    final isLoading = ref.watch(paymentControllerProvider);
+
     return [
       const Icon(Icons.hourglass_top_outlined, color: Colors.orange, size: 80),
       const SizedBox(height: 24),
       Text(
         'Selesaikan Pembayaran Anda',
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(context)
+            .textTheme
+            .headlineSmall
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 12),
       Text(
@@ -119,21 +142,30 @@ class BookingStatusScreen extends StatelessWidget {
         'Ke rekening [Nama Bank] [No. Rekening] a/n [Nama Pemilik]. Batas waktu pembayaran adalah 1 jam dari sekarang.',
         textAlign: TextAlign.center,
       ),
-       const SizedBox(height: 24),
-      // TODO: Tambahkan tombol "Upload Bukti Bayar" di sini untuk pengembangan selanjutnya.
+      const SizedBox(height: 24),
+      // --- [BARU] Tombol Upload Bukti Bayar ---
+      CustomButton(
+        text: 'Upload Bukti Bayar',
+        isLoading: isLoading,
+        onPressed: () => _pickAndUploadProof(context, ref),
+      ),
+      const SizedBox(height: 24),
       _buildBookingId(context, booking.id),
     ];
   }
 
-  /// Widget helper untuk status generik lainnya.
-  List<Widget> _buildGenericStatusContent(BuildContext context, BookingModel booking) {
+  List<Widget> _buildGenericStatusContent(
+      BuildContext context, BookingModel booking) {
     return [
       const Icon(Icons.info_outline, color: Colors.blue, size: 80),
       const SizedBox(height: 24),
       Text(
         'Status Pesanan',
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(context)
+            .textTheme
+            .headlineSmall
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 12),
       Text(
@@ -146,7 +178,6 @@ class BookingStatusScreen extends StatelessWidget {
     ];
   }
 
-  /// Widget helper untuk menampilkan Booking ID.
   Widget _buildBookingId(BuildContext context, String bookingId) {
     return Text(
       'ID Pesanan: $bookingId',

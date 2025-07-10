@@ -33,7 +33,7 @@ class AppColors {
 
   // --- Warna Berdasarkan Tema (Dark Mode) ---
   // Warna-warna ini digunakan saat aplikasi dalam mode gelap (dark mode).
-  static const Color darkPrimary = navy; // Kita tetap pakai navy agar brand konsisten
+  static const Color darkPrimary = Color(0xFF00C853); // Kita tetap pakai navy agar brand konsisten
   static const Color darkSecondary = teal; // Aksen tetap teal agar menonjol
   static const Color darkBackground = Color(0xFF121212); // Latar belakang abu-abu sangat gelap
   static const Color darkSurface = Color(0xFF1E1E1E); // Warna untuk card, dialog (sedikit lebih terang dari background)

@@ -40,6 +40,8 @@ class UserModel extends Equatable {
   /// Status verifikasi email dari Appwrite.
   final bool isEmailVerified;
 
+  final String? photoUrl;
+
   const UserModel({
     required this.uid,
     required this.name,
@@ -48,6 +50,7 @@ class UserModel extends Equatable {
     required this.role,
     this.assignedCenterId,
     required this.isEmailVerified,
+    this.photoUrl,
   });
 
   /// Constructor kosong untuk representasi pengguna yang tidak ada atau
@@ -59,7 +62,8 @@ class UserModel extends Equatable {
         phone = null,
         role = UserRole.unknown,
         assignedCenterId = null,
-        isEmailVerified = false;
+        isEmailVerified = false,
+        photoUrl = null;
 
   /// `copyWith` method untuk membuat salinan objek dengan nilai yang diperbarui.
   /// Ini penting untuk state management yang immutable.
@@ -71,6 +75,7 @@ class UserModel extends Equatable {
     UserRole? role,
     String? assignedCenterId,
     bool? isEmailVerified,
+    String? photoUrl,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -80,6 +85,7 @@ class UserModel extends Equatable {
       role: role ?? this.role,
       assignedCenterId: assignedCenterId ?? this.assignedCenterId,
       isEmailVerified: isEmailVerified ?? this.isEmailVerified,
+      photoUrl: photoUrl ?? this.photoUrl,
     );
   }
 
@@ -101,6 +107,7 @@ class UserModel extends Equatable {
       assignedCenterId: user.prefs.data['assignedCenterId'],
       // Mengonversi string peran menjadi enum `UserRole`.
       role: _mapStringToUserRole(roleString),
+      photoUrl: user.prefs.data['photoUrl'],
     );
   }
 
@@ -131,6 +138,7 @@ class UserModel extends Equatable {
       role,
       assignedCenterId,
       isEmailVerified,
+      photoUrl,
     ];
   }
 

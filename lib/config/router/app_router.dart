@@ -30,7 +30,6 @@ import 'package:gsports/features/6_sc_admin/view/dashboard/sc_admin_dashboard_sc
 import 'package:gsports/features/6_sc_admin/view/fields/sc_admin_field_edit_screen.dart';
 import 'package:gsports/features/6_sc_admin/view/fields/sc_admin_field_list_screen.dart';
 import 'package:gsports/features/6_sc_admin/view/profile/sc_admin_profile_screen.dart';
-// --- Impor Baru untuk Halaman Jadwal Admin ---
 import 'package:gsports/features/6_sc_admin/view/schedule/sc_admin_schedule_screen.dart';
 import 'package:gsports/shared_widgets/bottom_nav_bar.dart';
 import 'package:gsports/shared_widgets/error_display.dart';
@@ -102,8 +101,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         name: RouteNames.bookingStatus,
         path: '/booking-status',
         builder: (context, state) {
-          final booking = state.extra as BookingModel;
-          return BookingStatusScreen(booking: booking);
+          // Pastikan extra tidak null sebelum di-cast
+          if (state.extra is BookingModel) {
+            final booking = state.extra as BookingModel;
+            return BookingStatusScreen(booking: booking);
+          }
+          return const ErrorDisplay(message: 'Data booking tidak valid.');
         },
       ),
 
@@ -129,6 +132,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                       final scId = state.pathParameters['scId']!;
                       return SCDetailsScreen(scId: scId);
                     },
+                    // --- RUTE BERSARANG DI BAWAH scDetails ---
                     routes: [
                       GoRoute(
                         name: RouteNames.fieldDetails, path: 'field/:fieldId',
@@ -137,11 +141,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                           return FieldDetailsScreen(fieldId: fieldId);
                         },
                       ),
+                      // --- [DIEDIT] RUTE BOOKING CONFIRMATION DITAMBAHKAN DI SINI ---
+                      // Path lengkapnya: /home/sc/:scId/booking
                       GoRoute(
-                        name: RouteNames.bookingConfirmation, path: 'booking',
+                        name: RouteNames.bookingConfirmation,
+                        path: 'booking', 
                         builder: (context, state) {
-                          final params = state.extra as BookingConfirmationParams;
-                          return BookingConfirmationScreen(params: params);
+                          // Pastikan extra tidak null sebelum di-cast
+                          if (state.extra is BookingConfirmationParams) {
+                            final params = state.extra as BookingConfirmationParams;
+                            return BookingConfirmationScreen(params: params);
+                          }
+                          return const ErrorDisplay(message: 'Data konfirmasi tidak valid.');
                         },
                       ),
                     ],
@@ -163,8 +174,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     name: RouteNames.editProfile, path: 'edit',
                     builder: (context, state) {
-                      final user = state.extra as UserModel;
-                      return EditProfileScreen(user: user);
+                       if (state.extra is UserModel) {
+                        final user = state.extra as UserModel;
+                        return EditProfileScreen(user: user);
+                      }
+                      return const ErrorDisplay(message: 'Data pengguna tidak valid.');
                     },
                   ),
                 ],
@@ -174,7 +188,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // Rute untuk Admin SC
+      // Rute untuk Admin SC (Tidak ada perubahan di sini)
       GoRoute(
         name: RouteNames.adminDashboard,
         path: '/admin/dashboard',
@@ -189,6 +203,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                     name: RouteNames.adminFieldEdit,
                     path: 'edit',
                     builder: (context, state) {
+                      // Field bisa null (untuk mode tambah)
                       final field = state.extra as FieldModel?;
                       return SCAdminFieldEditScreen(field: field);
                     },
@@ -204,8 +219,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                     name: RouteNames.adminBookingDetails,
                     path: 'details',
                     builder: (context, state) {
-                      final booking = state.extra as BookingModel;
-                      return SCAdminBookingDetailsScreen(booking: booking);
+                      if (state.extra is BookingModel) {
+                        final booking = state.extra as BookingModel;
+                        return SCAdminBookingDetailsScreen(booking: booking);
+                      }
+                      return const ErrorDisplay(message: 'Data booking tidak valid.');
                     },
                 ),
             ],
@@ -215,10 +233,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             path: 'profile',
             builder: (context, state) => const SCAdminProfileScreen(),
           ),
-          // --- PENAMBAHAN RUTE BARU DI SINI ---
           GoRoute(
             name: RouteNames.adminSchedule,
-            path: 'schedule', // Path lengkapnya menjadi /admin/dashboard/schedule
+            path: 'schedule',
             builder: (context, state) => const SCAdminScheduleScreen(),
           ),
         ],
